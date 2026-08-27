@@ -21,9 +21,9 @@ Pages 生成器的输入必须是按 Release ID 分目录保存的完整发行�
 1. 从最新 `master` 创建短生命周期工作分支。
 2. 使用 Conventional Commits，并让一个 PR 只处理一个可独立说明的主题。
 3. 运行与改动相称的测试，并在 PR 中只报告真实执行结果。
-4. workflow 中的第三方 Action 必须固定到完整 commit SHA；不得扩大 token 权限或让 Pages job 取得仓库内容写权限。
+4. SDK 发布、CI 与 Pages 的 workflow 实现统一在主仓库维护；本仓库只保留事件触发、最小权限和固定到主仓库完整 commit SHA 的薄调用器。Pages 部署 job 只取得 `pages: write` 与 `id-token: write`，所有调用器都不得接收跨仓库发布 token。
 5. 已发布 Tag、Release 和附件不可移动、覆盖或删除后重建；错误通过新 SDK 版本修正。
 
 ## English summary
 
-Use the main PixivDownloader repository for API, BOM, templates, Javadocs, version gates, and release packaging. Use this repository only for its documentation, Pages builder, and repository policy. Run `npm test`, keep generated files out of `master`, pin Actions to full commit SHAs, and never overwrite an existing SDK tag or release asset.
+Use the main PixivDownloader repository for API, BOM, templates, Javadocs, version gates, release packaging, and reusable CI/Pages workflow implementations. This repository keeps only event-triggered thin callers pinned to a full main-repository commit SHA and grants Pages write/OIDC permissions only to its deploy job; cross-repository release tokens never enter these callers. Run `npm test`, keep generated files out of `master`, and never overwrite an existing SDK tag or release asset.
