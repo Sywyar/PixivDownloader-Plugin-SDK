@@ -12,4 +12,4 @@ permissions:
 
 jobs:
   verify:
-    uses: Sywyar/PixivDownloader/.github/workflows/sdk-repository-ci.yml@8f6dd1604119d6aaa1566d761838f8a867457e87
+    uses: Sywyar/PixivDownloader/.github/workflows/sdk-repository-ci.yml@2c6bdd2004dd63e89371084862f15520cb398631
