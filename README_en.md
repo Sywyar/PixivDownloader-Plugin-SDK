@@ -8,18 +8,17 @@ This repository is the distribution entry point for the PixivDownloader Plugin S
 
 The [Releases](https://github.com/Sywyar/PixivDownloader-Plugin-SDK/releases) page is the source of truth for available versions. An empty list means that no SDK has been published yet. Each published version provides:
 
-- `PixivDownloader-Plugin-SDK-<version>.zip`: the default download-type plugin project, a minimal feature example, Maven Wrapper, and shared IntelliJ IDEA, VS Code, and Eclipse development configurations;
-- `PixivDownloader-Plugin-SDK-Javadocs-<version>.zip`: the complete aggregate Javadocs;
+- `PixivDownloader-Plugin-SDK-<version>.zip`: the single complete SDK package, containing the default download-type plugin project, a minimal feature example, Maven Wrapper, complete aggregate Javadocs, and shared IntelliJ IDEA, VS Code, and Eclipse development configurations;
 - `sdk-release.json`: SDK identity, source commit, Maven coordinates, and artifact digests;
 - `SHA256SUMS` and detached signatures: integrity and provenance material.
 
-After downloading both ZIP files, `sdk-release.json`, and `SHA256SUMS` from the same Release, run:
+After downloading the SDK ZIP, `sdk-release.json`, and `SHA256SUMS` from the same Release, run:
 
 ```bash
 sha256sum -c SHA256SUMS
 ```
 
-Extract the SDK ZIP and open its root in a supported IDE. For a command-line build, run `./mvnw clean verify`, or `mvnw.cmd clean verify` on Windows.
+Extract the SDK ZIP and open its root in a supported IDE. For a command-line build, run `./mvnw clean verify`, or `mvnw.cmd clean verify` on Windows. Open `docs/javadocs/index.html` for the complete API documentation.
 
 ## Maven coordinates
 

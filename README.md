@@ -8,18 +8,17 @@
 
 可用版本以本仓库的 [Releases](https://github.com/Sywyar/PixivDownloader-Plugin-SDK/releases) 为唯一事实源。列表为空表示尚未公开发布 SDK。每个版本发布后提供：
 
-- `PixivDownloader-Plugin-SDK-<version>.zip`：包含默认下载类型插件工程、最小 feature 示例、Maven Wrapper，以及 IntelliJ IDEA、VS Code 和 Eclipse 的共享开发配置；
-- `PixivDownloader-Plugin-SDK-Javadocs-<version>.zip`：完整聚合 Javadoc；
+- `PixivDownloader-Plugin-SDK-<version>.zip`：唯一的完整 SDK 包，包含默认下载类型插件工程、最小 feature 示例、Maven Wrapper、完整聚合 Javadoc，以及 IntelliJ IDEA、VS Code 和 Eclipse 的共享开发配置；
 - `sdk-release.json`：SDK 版本、源码提交、Maven 坐标和产物摘要；
 - `SHA256SUMS` 与 detached signatures：完整性和来源校验材料。
 
-下载同一 Release 的两个 ZIP、`sdk-release.json` 和 `SHA256SUMS` 后可执行：
+下载同一 Release 的 SDK ZIP、`sdk-release.json` 和 `SHA256SUMS` 后可执行：
 
 ```bash
 sha256sum -c SHA256SUMS
 ```
 
-SDK ZIP 解压后，直接用受支持的 IDE 打开根目录；命令行构建使用 `./mvnw clean verify`，Windows 使用 `mvnw.cmd clean verify`。
+SDK ZIP 解压后，直接用受支持的 IDE 打开根目录；命令行构建使用 `./mvnw clean verify`，Windows 使用 `mvnw.cmd clean verify`。完整 API 文档从 `docs/javadocs/index.html` 打开。
 
 ## Maven 坐标
 

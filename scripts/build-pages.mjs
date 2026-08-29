@@ -85,7 +85,7 @@ function validateMetadata(metadata, identity, checksums) {
     ]) {
         if (metadata[key] !== expected) fail(`${identity.releaseId} metadata has invalid ${key}`);
     }
-    if (metadata.schemaVersion !== 1 || metadata.sourceRepository !== SOURCE_REPOSITORY
+    if (![1, 2].includes(metadata.schemaVersion) || metadata.sourceRepository !== SOURCE_REPOSITORY
             || !/^[0-9a-f]{40}$/u.test(metadata.sourceCommitSha) || metadata.javaVersion !== 17) {
         fail(`${identity.releaseId} metadata has an invalid provenance header`);
     }
@@ -106,20 +106,25 @@ function validateMetadata(metadata, identity, checksums) {
 
     const sdkZip = `PixivDownloader-Plugin-SDK-${identity.version}.zip`;
     const javadocsZip = `PixivDownloader-Plugin-SDK-Javadocs-${identity.version}.zip`;
-    if (!Array.isArray(metadata.artifacts) || metadata.artifacts.length !== 2) {
-        fail(`${identity.releaseId} metadata must describe exactly two ZIP artifacts`);
+    const expectedArtifacts = metadata.schemaVersion === 1 ? [sdkZip, javadocsZip] : [sdkZip];
+    if (!Array.isArray(metadata.artifacts) || metadata.artifacts.length !== expectedArtifacts.length) {
+        fail(`${identity.releaseId} metadata has invalid SDK artifacts`);
     }
     const artifacts = new Map(metadata.artifacts.map(artifact => [artifact.file, artifact.sha256]));
-    assertExactSet(new Set(artifacts.keys()), new Set([sdkZip, javadocsZip]), `${identity.releaseId} metadata`);
-    for (const file of [sdkZip, javadocsZip]) {
+    assertExactSet(new Set(artifacts.keys()), new Set(expectedArtifacts), `${identity.releaseId} metadata`);
+    for (const file of expectedArtifacts) {
         if (!/^[0-9a-f]{64}$/u.test(artifacts.get(file)) || artifacts.get(file) !== checksums.get(file)) {
             fail(`${identity.releaseId} metadata and SHA256SUMS disagree for ${file}`);
         }
     }
-    return { sdkZip, javadocsZip };
+    return {
+        files: expectedArtifacts,
+        archive: metadata.schemaVersion === 1 ? javadocsZip : sdkZip,
+        javadocsRoot: metadata.schemaVersion === 1 ? '' : 'docs/javadocs/',
+    };
 }
 
-function validateArchiveEntries(archive, releaseId) {
+function validateArchiveEntries(archive, releaseId, javadocsRoot) {
     const entries = execFileSync('jar', ['--list', '--file', archive], { encoding: 'utf8' })
             .split(/\r?\n/u).filter(Boolean);
     const unique = new Set();
@@ -127,39 +132,39 @@ function validateArchiveEntries(archive, releaseId) {
         const parts = entry.split('/');
         if (entry.includes('\\') || path.posix.isAbsolute(entry) || /^[A-Za-z]:/u.test(entry)
                 || parts.includes('..') || unique.has(entry)) {
-            fail(`${releaseId} Javadoc ZIP contains an unsafe entry: ${entry}`);
+            fail(`${releaseId} SDK archive contains an unsafe entry: ${entry}`);
         }
         unique.add(entry);
     }
-    if (!unique.has('index.html')) fail(`${releaseId} Javadoc ZIP has no root index.html`);
+    const index = `${javadocsRoot}index.html`;
+    if (!unique.has(index)) fail(`${releaseId} SDK archive has no ${index}`);
 }
 
 function readRelease(releasesRoot, directory) {
     const identity = parseReleaseId(directory);
     const root = path.join(releasesRoot, directory);
-    const expectedNames = new Set([
-        `PixivDownloader-Plugin-SDK-${identity.version}.zip`,
-        `PixivDownloader-Plugin-SDK-Javadocs-${identity.version}.zip`,
-        'sdk-release.json',
-        'SHA256SUMS',
-    ]);
     const entries = fs.readdirSync(root, { withFileTypes: true });
     if (entries.some(entry => !entry.isFile())) fail(`${directory} contains a non-file Release asset`);
+    for (const name of ['sdk-release.json', 'SHA256SUMS']) {
+        requirePlainFile(path.join(root, name), `${directory}/${name}`);
+    }
+    const checksums = parseChecksums(fs.readFileSync(path.join(root, 'SHA256SUMS'), 'utf8'), directory);
+    const metadata = JSON.parse(fs.readFileSync(path.join(root, 'sdk-release.json'), 'utf8'));
+    const artifacts = validateMetadata(metadata, identity, checksums);
+    const expectedNames = new Set([...artifacts.files, 'sdk-release.json', 'SHA256SUMS']);
     assertExactSet(new Set(entries.map(entry => entry.name)), expectedNames, directory);
     for (const name of expectedNames) requirePlainFile(path.join(root, name), `${directory}/${name}`);
 
-    const checksums = parseChecksums(fs.readFileSync(path.join(root, 'SHA256SUMS'), 'utf8'), directory);
     const expectedChecksums = new Set([...expectedNames].filter(name => name !== 'SHA256SUMS'));
     assertExactSet(new Set(checksums.keys()), expectedChecksums, `${directory} SHA256SUMS`);
     for (const [name, expected] of checksums) {
         if (sha256(path.join(root, name)) !== expected) fail(`${directory} checksum mismatch: ${name}`);
     }
 
-    const metadata = JSON.parse(fs.readFileSync(path.join(root, 'sdk-release.json'), 'utf8'));
-    const artifacts = validateMetadata(metadata, identity, checksums);
-    const archive = path.join(root, artifacts.javadocsZip);
-    validateArchiveEntries(archive, directory);
-    return { ...identity, sourceCommitSha: metadata.sourceCommitSha, archive };
+    const archive = path.join(root, artifacts.archive);
+    validateArchiveEntries(archive, directory, artifacts.javadocsRoot);
+    return { ...identity, sourceCommitSha: metadata.sourceCommitSha, archive,
+        javadocsRoot: artifacts.javadocsRoot };
 }
 
 function escapeHtml(value) {
@@ -206,12 +211,18 @@ export function buildPages({ releasesDir, output }) {
 
     fs.rmSync(destination, { recursive: true, force: true });
     fs.mkdirSync(path.join(destination, 'javadoc'), { recursive: true });
+    const extraction = path.join(destination, '.sdk-extract');
     for (const release of releases) {
         const target = path.join(destination, 'javadoc', release.releaseId);
-        fs.mkdirSync(target);
-        execFileSync('jar', ['--extract', '--file', release.archive], { cwd: target, stdio: 'inherit' });
+        fs.rmSync(extraction, { recursive: true, force: true });
+        fs.mkdirSync(extraction);
+        execFileSync('jar', ['--extract', '--file', release.archive], { cwd: extraction, stdio: 'inherit' });
+        const source = path.join(extraction, ...release.javadocsRoot.split('/').filter(Boolean));
+        requirePlainFile(path.join(source, 'index.html'), `${release.releaseId}/index.html`);
+        fs.cpSync(source, target, { recursive: true });
         requirePlainFile(path.join(target, 'index.html'), `${release.releaseId}/index.html`);
     }
+    fs.rmSync(extraction, { recursive: true, force: true });
 
     const latest = releases.find(release => !release.prerelease) ?? null;
     const preview = releases.find(release => release.prerelease) ?? null;
@@ -220,7 +231,7 @@ export function buildPages({ releasesDir, output }) {
         schemaVersion: 1,
         latest: latest?.releaseId ?? null,
         preview: preview?.releaseId ?? null,
-        releases: releases.map(({ archive, ...release }) => release),
+        releases: releases.map(({ archive, javadocsRoot, ...release }) => release),
     }, null, 2)}\n`, 'utf8');
     for (const [name, release] of [['latest', latest], ['preview', preview]]) {
         if (!release) continue;
