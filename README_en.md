@@ -6,39 +6,39 @@ This repository is the distribution entry point for the PixivDownloader Plugin S
 
 ## Get the SDK
 
-The [Releases](https://github.com/Sywyar/PixivDownloader-Plugin-SDK/releases) page is the source of truth for available versions. An empty list means that no SDK has been published yet. Each published version provides:
+The [Releases](https://github.com/Sywyar/PixivDownloader-Plugin-SDK/releases) page is the source of truth for available versions. The layout below applies to packages with `developmentRuntime` metadata. Use the bundled README for older versions.
 
-- `PixivDownloader-Plugin-SDK-<version>.zip`: the single complete SDK package, containing the default download-type plugin project, a minimal feature example, Maven Wrapper, complete aggregate Javadocs, and shared IntelliJ IDEA, VS Code, and Eclipse development configurations;
-- `sdk-release.json`: SDK identity, source commit, Maven coordinates, and artifact digests;
+- `PixivDownloader-Plugin-SDK-<version>.zip`: a plugin project with root `src/`, independent download-type, Gradle and sbt examples, Maven Wrapper, complete Javadocs, and shared IntelliJ IDEA, VS Code and Eclipse Run / Debug configurations;
+- `PixivDownload-<host-version>-full-offline.zip`: the separate runtime asset containing the fixed host and complete official plugin set, downloaded by the tools on first run;
+- `sdk-release.json`: SDK identity, source commit, Maven coordinates, and fixed identities, sizes and hashes for the host, plugin manifest and both ZIPs;
 - `SHA256SUMS` and detached signatures: integrity and provenance material.
 
 After downloading the SDK ZIP, `sdk-release.json`, and `SHA256SUMS` from the same Release, run:
 
 ```bash
-sha256sum -c SHA256SUMS
+sha256sum --ignore-missing --check SHA256SUMS
 ```
 
-Extract the SDK ZIP and open its root in a supported IDE. For a command-line build, run `./mvnw clean verify`, or `mvnw.cmd clean verify` on Windows. Open `docs/javadocs/index.html` for the complete API documentation.
+Install JDK 17 and Node.js, extract the SDK, and import the root `pom.xml`. Build with `sh ./mvnw clean verify`, run with `sh ./mvnw verify exec:exec@sdk-run`, replace `sdk-run` with `sdk-debug` to debug, and stop with `sh ./mvnw exec:exec@sdk-stop`. On Windows, use `.\mvnw.cmd`. Open `docs/javadocs/index.html` for the complete API documentation.
+
+Importing the project does not start the host. Run / Debug builds the current plugin, verifies the fixed runtime and installs that artifact through the production local installation flow. A failed build stops startup. Worker plugins are debugged in their own JVM; full-trust plugins are debugged in the host. The default address is `127.0.0.1:5005`. See the bundled README for IDE instructions and prerequisites.
+
+Verified ZIPs are cached in `~/.cache/pixivdownloader-sdk/`. Each project stores its own runtime copies, configuration, databases, logs and downloads in `.dev/`. Every run restores the fixed official plugin set and disables automatic updates in this environment. Missing assets or hash mismatches fail without selecting a newer nightly. Offline use requires both the runtime package and build dependencies to be cached.
 
 ## Maven coordinates
 
-Published versions use the following Maven Central coordinates. The version must match the Release exactly:
+Releases whose metadata includes `pixivdownload-sdk` can use the following Maven Central coordinates. Match the version exactly. For older releases, follow the bundled README for individual API modules and the BOM.
 
 ```xml
-<dependencyManagement>
-  <dependencies>
-    <dependency>
-      <groupId>io.github.sywyar.pixivdownloader</groupId>
-      <artifactId>pixivdownload-sdk-bom</artifactId>
-      <version>SDK_VERSION</version>
-      <type>pom</type>
-      <scope>import</scope>
-    </dependency>
-  </dependencies>
-</dependencyManagement>
+<dependency>
+  <groupId>io.github.sywyar.pixivdownloader</groupId>
+  <artifactId>pixivdownload-sdk</artifactId>
+  <version>SDK_VERSION</version>
+  <scope>provided</scope>
+</dependency>
 ```
 
-The BOM aligns `pixivdownload-sdk-info`, `pixivdownload-plugin-api`, and `pixivdownload-core-api`. Plugins must not depend on the App artifact, private host implementations, or private classes from official plugins.
+Use `compileOnly` in Gradle or `Provided` in sbt. The thin entry JAR uses standard POM dependencies to expose the public SDK and host-provided compile dependencies without bundling them into the plugin. The three API modules and `pixivdownload-sdk-bom` remain available separately. Plugins must not depend on the App artifact, private host implementations, or private classes from official plugins.
 
 ## Versioning and compatibility
 
@@ -48,12 +48,14 @@ The SDK version is independent from the App version. It uses `x.y.z` plus struct
 
 ## Javadocs
 
-After each SDK Release, the Pages workflow verifies every historical Release again and deploys Javadocs to:
+After each SDK Release, the Pages workflow verifies the SDK documentation assets of every historical Release and deploys Javadocs to:
 
 - version index: <https://sywyar.github.io/PixivDownloader-Plugin-SDK/>;
 - stable entry: `/latest/`, which never points to an RC when no stable version exists;
 - prerelease entry: `/preview/`;
 - immutable version: `/javadoc/sdk-api-v<version>/`.
+
+Pages supports historical schemas 1/2 and schema 4 with a separate runtime asset. Site builds download only the SDK or historical Javadoc ZIP needed for documentation, without downloading past hosts. The main repository publishing and runtime consumer checks verify the runtime assets.
 
 ## Contribution boundaries
 
@@ -61,4 +63,4 @@ After each SDK Release, the Pages workflow verifies every historical Release aga
 - README files, Pages generation, download instructions, and security policy in this repository: follow [CONTRIBUTING.md](CONTRIBUTING.md).
 - SDK Releases, tags, and release assets are created by the trusted publishing workflow in the main repository and must not be overwritten manually.
 
-The complete plugin development standard lives in the [PixivDownloader documentation](https://sywyar.github.io/PixivDownloader/). The official Douyin plugin is a complete reference implementation, not a host dependency, third-party dependency, or private SDK contract.
+The complete plugin development standard lives in the [PixivDownloader documentation](https://sywyar.github.io/PixivDownloader/). The Douyin module is a complete third-party reference implementation built through the public SDK. It is outside the official distribution set.

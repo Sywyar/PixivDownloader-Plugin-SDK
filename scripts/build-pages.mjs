@@ -11,6 +11,7 @@ const RELEASE_PATTERN = /^sdk-api-v(?<version>(?<major>0|[1-9]\d*)\.(?<minor>0|[
 const CHANNEL_ORDER = new Map([['alpha', 0], ['beta', 1], ['rc', 2]]);
 const SOURCE_REPOSITORY = 'https://github.com/Sywyar/PixivDownloader';
 const MAVEN_GROUP = 'io.github.sywyar.pixivdownloader';
+export const SDK_JAVA_VERSION = 17;
 const MAVEN_ARTIFACTS = [
     'pixivdownload-sdk-info',
     'pixivdownload-plugin-api',
@@ -85,28 +86,60 @@ function validateMetadata(metadata, identity, checksums) {
     ]) {
         if (metadata[key] !== expected) fail(`${identity.releaseId} metadata has invalid ${key}`);
     }
-    if (![1, 2].includes(metadata.schemaVersion) || metadata.sourceRepository !== SOURCE_REPOSITORY
-            || !/^[0-9a-f]{40}$/u.test(metadata.sourceCommitSha) || metadata.javaVersion !== 17) {
+    if (![1, 2, 4].includes(metadata.schemaVersion) || metadata.sourceRepository !== SOURCE_REPOSITORY
+            || !/^[0-9a-f]{40}$/u.test(metadata.sourceCommitSha) || metadata.javaVersion !== SDK_JAVA_VERSION) {
         fail(`${identity.releaseId} metadata has an invalid provenance header`);
     }
-    if (!Array.isArray(metadata.mavenCoordinates) || metadata.mavenCoordinates.length !== MAVEN_ARTIFACTS.length) {
+    const expectedCoordinates = metadata.schemaVersion === 4 ? [...MAVEN_ARTIFACTS, 'pixivdownload-sdk'] : MAVEN_ARTIFACTS;
+    if (!Array.isArray(metadata.mavenCoordinates) || metadata.mavenCoordinates.length !== expectedCoordinates.length) {
         fail(`${identity.releaseId} metadata has invalid Maven coordinates`);
     }
     const coordinates = new Set();
     for (const coordinate of metadata.mavenCoordinates) {
         const expectedPackaging = coordinate.artifactId === 'pixivdownload-sdk-bom' ? 'pom' : 'jar';
         if (coordinate.groupId !== MAVEN_GROUP || coordinate.version !== identity.version
-                || !MAVEN_ARTIFACTS.includes(coordinate.artifactId)
+                || !expectedCoordinates.includes(coordinate.artifactId)
                 || coordinate.packaging !== expectedPackaging) {
             fail(`${identity.releaseId} metadata contains an invalid Maven coordinate`);
         }
         coordinates.add(coordinate.artifactId);
     }
-    if (coordinates.size !== MAVEN_ARTIFACTS.length) fail(`${identity.releaseId} repeats a Maven coordinate`);
+    if (coordinates.size !== expectedCoordinates.length) fail(`${identity.releaseId} repeats a Maven coordinate`);
 
     const sdkZip = `PixivDownloader-Plugin-SDK-${identity.version}.zip`;
     const javadocsZip = `PixivDownloader-Plugin-SDK-Javadocs-${identity.version}.zip`;
     const expectedArtifacts = metadata.schemaVersion === 1 ? [sdkZip, javadocsZip] : [sdkZip];
+    const downloadedFiles = [...expectedArtifacts];
+    if (metadata.schemaVersion === 4) {
+        const runtime = metadata.developmentRuntime;
+        const platforms = ['windows-x64', 'windows-arm64', 'linux-x64', 'linux-arm64', 'macos-arm64'];
+        if (!runtime || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(runtime.hostVersion)
+                || !/^[0-9a-f]{40}$/u.test(runtime.hostSourceCommitSha)
+                || !Array.isArray(runtime.platforms) || runtime.platforms.length === 0
+                || new Set(runtime.platforms).size !== runtime.platforms.length
+                || runtime.platforms.some(platform => !platforms.includes(platform))) {
+            fail(`${identity.releaseId} has an invalid fixed runtime identity`);
+        }
+        for (const [artifact, filename, maxBytes] of [
+            [runtime.archive, `PixivDownload-${runtime.hostVersion}-full-offline.zip`, 512 * 1024 * 1024],
+            [runtime.host, `PixivDownload-${runtime.hostVersion}.jar`, 512 * 1024 * 1024],
+            [runtime.pluginsManifest, 'plugins-manifest.json', 1024 * 1024],
+        ]) {
+            if (!artifact || artifact.file !== filename || !Number.isSafeInteger(artifact.size)
+                    || artifact.size <= 0 || artifact.size > maxBytes || !/^[0-9a-f]{64}$/u.test(artifact.sha256)) {
+                fail(`${identity.releaseId} has invalid fixed runtime artifacts`);
+            }
+        }
+        if (runtime.downloadUrl !== `https://github.com/Sywyar/PixivDownloader-Plugin-SDK/releases/download/${identity.releaseId}/${runtime.archive.file}`) {
+            fail(`${identity.releaseId} has an invalid fixed runtime URL`);
+        }
+        const declared = Array.isArray(metadata.artifacts)
+            ? metadata.artifacts.find(item => item.file === runtime.archive.file) : null;
+        if (!declared || declared.size !== runtime.archive.size || declared.sha256 !== runtime.archive.sha256) {
+            fail(`${identity.releaseId} runtime and release artifact identity disagree`);
+        }
+        expectedArtifacts.push(runtime.archive.file);
+    }
     if (!Array.isArray(metadata.artifacts) || metadata.artifacts.length !== expectedArtifacts.length) {
         fail(`${identity.releaseId} metadata has invalid SDK artifacts`);
     }
@@ -116,9 +149,16 @@ function validateMetadata(metadata, identity, checksums) {
         if (!/^[0-9a-f]{64}$/u.test(artifacts.get(file)) || artifacts.get(file) !== checksums.get(file)) {
             fail(`${identity.releaseId} metadata and SHA256SUMS disagree for ${file}`);
         }
+        if (metadata.schemaVersion === 4) {
+            const size = metadata.artifacts.find(item => item.file === file).size;
+            if (!Number.isSafeInteger(size) || size <= 0 || size > 512 * 1024 * 1024) {
+                fail(`${identity.releaseId} has invalid artifact size: ${file}`);
+            }
+        }
     }
     return {
         files: expectedArtifacts,
+        downloadedFiles,
         archive: metadata.schemaVersion === 1 ? javadocsZip : sdkZip,
         javadocsRoot: metadata.schemaVersion === 1 ? '' : 'docs/javadocs/',
     };
@@ -147,17 +187,24 @@ function readRelease(releasesRoot, directory) {
     if (entries.some(entry => !entry.isFile())) fail(`${directory} contains a non-file Release asset`);
     for (const name of ['sdk-release.json', 'SHA256SUMS']) {
         requirePlainFile(path.join(root, name), `${directory}/${name}`);
+        if (fs.statSync(path.join(root, name)).size > 1024 * 1024) fail(`${directory} metadata exceeds the byte limit`);
     }
     const checksums = parseChecksums(fs.readFileSync(path.join(root, 'SHA256SUMS'), 'utf8'), directory);
     const metadata = JSON.parse(fs.readFileSync(path.join(root, 'sdk-release.json'), 'utf8'));
     const artifacts = validateMetadata(metadata, identity, checksums);
-    const expectedNames = new Set([...artifacts.files, 'sdk-release.json', 'SHA256SUMS']);
+    const expectedNames = new Set([...artifacts.downloadedFiles, 'sdk-release.json', 'SHA256SUMS']);
     assertExactSet(new Set(entries.map(entry => entry.name)), expectedNames, directory);
     for (const name of expectedNames) requirePlainFile(path.join(root, name), `${directory}/${name}`);
 
-    const expectedChecksums = new Set([...expectedNames].filter(name => name !== 'SHA256SUMS'));
+    const expectedChecksums = new Set([...artifacts.files, 'sdk-release.json']);
     assertExactSet(new Set(checksums.keys()), expectedChecksums, `${directory} SHA256SUMS`);
     for (const [name, expected] of checksums) {
+        // 只有固定宿主 ZIP 不在站点输入中，其字节与签名由发布流程验证。
+        if (!expectedNames.has(name)) continue;
+        if (metadata.schemaVersion === 4 && name !== 'sdk-release.json'
+                && fs.statSync(path.join(root, name)).size !== metadata.artifacts.find(item => item.file === name).size) {
+            fail(`${directory} artifact size mismatch: ${name}`);
+        }
         if (sha256(path.join(root, name)) !== expected) fail(`${directory} checksum mismatch: ${name}`);
     }
 
@@ -216,7 +263,8 @@ export function buildPages({ releasesDir, output }) {
         const target = path.join(destination, 'javadoc', release.releaseId);
         fs.rmSync(extraction, { recursive: true, force: true });
         fs.mkdirSync(extraction);
-        execFileSync('jar', ['--extract', '--file', release.archive], { cwd: extraction, stdio: 'inherit' });
+        execFileSync('jar', ['--extract', '--file', release.archive,
+            ...(release.javadocsRoot ? [release.javadocsRoot] : [])], { cwd: extraction, stdio: 'inherit' });
         const source = path.join(extraction, ...release.javadocsRoot.split('/').filter(Boolean));
         requirePlainFile(path.join(source, 'index.html'), `${release.releaseId}/index.html`);
         fs.cpSync(source, target, { recursive: true });

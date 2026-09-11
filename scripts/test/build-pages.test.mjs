@@ -6,7 +6,11 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { buildPages, parseReleaseId } from '../build-pages.mjs';
+import { buildPages, parseReleaseId, SDK_JAVA_VERSION } from '../build-pages.mjs';
+
+// schema 行为与实际发行号无关；每次用生成的版本验证，避免冻结当前 SDK 或宿主版本。
+const TEST_VERSION = Array.from({ length: 3 }, () => crypto.randomInt(1, 100)).join('.');
+const releaseId = (sequence = 0, channel = 'rc') => `sdk-api-v${TEST_VERSION}${sequence ? `-${channel}${sequence}` : ''}`;
 
 function sha256(file) {
     return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -39,6 +43,9 @@ function createRelease(root, releaseId, schemaVersion = 2, includeJavadocs = tru
     }
     const artifactFiles = schemaVersion === 1 ? [sdkZip, javadocsZip] : [sdkZip];
     const artifacts = artifactFiles.map(file => ({ file, sha256: sha256(path.join(directory, file)) }));
+    if (schemaVersion === 4) {
+        for (const artifact of artifacts) artifact.size = fs.statSync(path.join(directory, artifact.file)).size;
+    }
     const metadata = {
         schemaVersion,
         sdkVersion: identity.version,
@@ -53,7 +60,7 @@ function createRelease(root, releaseId, schemaVersion = 2, includeJavadocs = tru
         sourceCommitSha: 'a'.repeat(40),
         minimumVerifiedHostRelease: null,
         verifiedHostSourceSha: null,
-        javaVersion: 17,
+        javaVersion: SDK_JAVA_VERSION,
         mavenCoordinates: [
             ['pixivdownload-sdk-info', 'jar'],
             ['pixivdownload-plugin-api', 'jar'],
@@ -64,6 +71,18 @@ function createRelease(root, releaseId, schemaVersion = 2, includeJavadocs = tru
         })),
         artifacts,
     };
+    if (schemaVersion === 4) {
+        metadata.mavenCoordinates.push({ groupId: 'io.github.sywyar.pixivdownloader', artifactId: 'pixivdownload-sdk',
+            version: identity.version, packaging: 'jar' });
+        metadata.developmentRuntime = {
+            hostVersion: TEST_VERSION, hostSourceCommitSha: 'a'.repeat(40), platforms: ['windows-x64', 'linux-x64'],
+            downloadUrl: `https://github.com/Sywyar/PixivDownloader-Plugin-SDK/releases/download/${releaseId}/PixivDownload-${TEST_VERSION}-full-offline.zip`,
+            archive: { file: `PixivDownload-${TEST_VERSION}-full-offline.zip`, size: 150000000, sha256: 'b'.repeat(64) },
+            host: { file: `PixivDownload-${TEST_VERSION}.jar`, size: 50000000, sha256: 'c'.repeat(64) },
+            pluginsManifest: { file: 'plugins-manifest.json', size: 4096, sha256: 'd'.repeat(64) },
+        };
+        artifacts.push(metadata.developmentRuntime.archive);
+    }
     const metadataFile = path.join(directory, 'sdk-release.json');
     fs.writeFileSync(metadataFile, `${JSON.stringify(metadata, null, 2)}\n`, 'utf8');
     fs.writeFileSync(path.join(directory, 'SHA256SUMS'), `${[
@@ -81,14 +100,14 @@ test('构建器校验全部发行附件并区分稳定版与预发布版入口',
         const releases = path.join(root, 'releases');
         const output = path.join(root, 'site');
         fs.mkdirSync(releases);
-        createRelease(releases, 'sdk-api-v1.0.0-rc2');
-        createRelease(releases, 'sdk-api-v1.0.0', 1);
+        createRelease(releases, releaseId(1));
+        createRelease(releases, releaseId(), 1);
         const result = buildPages({ releasesDir: releases, output });
-        assert.equal(result.latest.releaseId, 'sdk-api-v1.0.0');
-        assert.equal(result.preview.releaseId, 'sdk-api-v1.0.0-rc2');
-        assert.match(fs.readFileSync(path.join(output, 'latest', 'index.html'), 'utf8'), /sdk-api-v1\.0\.0\//u);
-        assert.match(fs.readFileSync(path.join(output, 'preview', 'index.html'), 'utf8'), /sdk-api-v1\.0\.0-rc2\//u);
-        assert.match(fs.readFileSync(path.join(output, 'javadoc', 'sdk-api-v1.0.0', 'index.html'), 'utf8'), /1\.0\.0/u);
+        assert.equal(result.latest.releaseId, releaseId());
+        assert.equal(result.preview.releaseId, releaseId(1));
+        assert.ok(fs.readFileSync(path.join(output, 'latest', 'index.html'), 'utf8').includes(`${releaseId()}/`));
+        assert.ok(fs.readFileSync(path.join(output, 'preview', 'index.html'), 'utf8').includes(`${releaseId(1)}/`));
+        assert.ok(fs.readFileSync(path.join(output, 'javadoc', releaseId(), 'index.html'), 'utf8').includes(TEST_VERSION));
     } finally {
         fs.rmSync(root, { recursive: true, force: true });
     }
@@ -99,8 +118,8 @@ test('构建器拒绝摘要不一致的历史发行附件', () => {
     try {
         const releases = path.join(root, 'releases');
         fs.mkdirSync(releases);
-        const directory = createRelease(releases, 'sdk-api-v2.0.0-rc1');
-        fs.appendFileSync(path.join(directory, 'PixivDownloader-Plugin-SDK-2.0.0-rc1.zip'), 'tampered', 'utf8');
+        const directory = createRelease(releases, releaseId(1));
+        fs.appendFileSync(path.join(directory, `PixivDownloader-Plugin-SDK-${parseReleaseId(releaseId(1)).version}.zip`), 'tampered', 'utf8');
         assert.throws(() => buildPages({ releasesDir: releases, output: path.join(root, 'site') }),
                 /checksum mismatch/u);
     } finally {
@@ -114,10 +133,10 @@ test('没有稳定版时不生成 latest 入口且输出不能覆盖发行输入
         const releases = path.join(root, 'releases');
         const output = path.join(root, 'site');
         fs.mkdirSync(releases);
-        createRelease(releases, 'sdk-api-v1.0.0-rc1');
+        createRelease(releases, releaseId(1));
         const result = buildPages({ releasesDir: releases, output });
         assert.equal(result.latest, null);
-        assert.equal(result.preview.releaseId, 'sdk-api-v1.0.0-rc1');
+        assert.equal(result.preview.releaseId, releaseId(1));
         assert.equal(fs.existsSync(path.join(output, 'latest')), false);
         assert.throws(() => buildPages({ releasesDir: releases, output: path.join(releases, 'site') }),
                 /unsafe Pages output path/u);
@@ -131,7 +150,7 @@ test('整合 SDK 缺少内置 Javadoc 时拒绝构建 Pages', () => {
     try {
         const releases = path.join(root, 'releases');
         fs.mkdirSync(releases);
-        createRelease(releases, 'sdk-api-v1.0.0-rc3', 2, false);
+        createRelease(releases, releaseId(1), 2, false);
         assert.throws(() => buildPages({ releasesDir: releases, output: path.join(root, 'site') }),
                 /has no docs\/javadocs\/index\.html/u);
     } finally {
@@ -140,6 +159,34 @@ test('整合 SDK 缺少内置 Javadoc 时拒绝构建 Pages', () => {
 });
 
 test('发行 ID 只接受结构化 SDK 版本', () => {
-    assert.throws(() => parseReleaseId('sdk-api-v1.0.0-r1'), /invalid SDK Release ID/u);
-    assert.equal(parseReleaseId('sdk-api-v3.2.1-beta4').prereleaseSequence, 4);
+    const sequence = crypto.randomInt(1, 100);
+    assert.throws(() => parseReleaseId(releaseId(sequence, 'r')), /invalid SDK Release ID/u);
+    assert.equal(parseReleaseId(releaseId(sequence, 'beta')).prereleaseSequence, sequence);
+});
+
+test('当前与历史 schema 共存，宿主 ZIP 不参与 Pages 下载和解压', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pixiv-sdk-pages-runtime-'));
+    try {
+        const releases = path.join(root, 'releases');
+        fs.mkdirSync(releases);
+        const schemas = [1, 2, 4];
+        const directories = schemas.map((schema, index) => createRelease(releases, releaseId(index + 1), schema));
+        const directory = directories.at(-1);
+        const build = () => buildPages({ releasesDir: releases, output: path.join(root, 'site') });
+        const result = build();
+        assert.equal(result.releases.length, schemas.length);
+        assert.equal(result.preview.releaseId, releaseId(schemas.length));
+        assert.equal(fs.existsSync(path.join(directory, `PixivDownload-${TEST_VERSION}-full-offline.zip`)), false);
+        const file = path.join(directory, 'sdk-release.json');
+        const metadata = JSON.parse(fs.readFileSync(file, 'utf8'));
+        metadata.developmentRuntime.archive.sha256 = 'e'.repeat(64);
+        fs.writeFileSync(file, JSON.stringify(metadata), 'utf8');
+        assert.throws(build, /identity disagree/u);
+        metadata.artifacts.find(item => item.file.endsWith('-full-offline.zip')).sha256 = 'e'.repeat(64);
+        fs.writeFileSync(file, JSON.stringify(metadata), 'utf8');
+        assert.throws(build, /SHA256SUMS disagree/u);
+        metadata.developmentRuntime.downloadUrl = 'https://github.com/Sywyar/PixivDownloader/releases/download/nightly/runtime.zip';
+        fs.writeFileSync(file, JSON.stringify(metadata), 'utf8');
+        assert.throws(build, /runtime URL/u);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

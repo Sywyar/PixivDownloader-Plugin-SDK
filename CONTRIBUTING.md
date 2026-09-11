@@ -14,7 +14,7 @@
 npm test
 ```
 
-Pages 生成器的输入必须是按 Release ID 分目录保存的完整发行附件。生成内容写入临时或 `target/` 目录，不提交生成站点。
+Pages 生成器的输入按 Release ID 分目录保存，包含 `sdk-release.json`、`SHA256SUMS` 及生成 Javadoc 所需的 SDK ZIP；schema 1 还需历史独立 Javadoc ZIP。schema 4 的宿主运行 ZIP 只校验其元数据，不下载到站点输入。生成内容写入临时或 `target/` 目录，不提交生成站点。
 
 ## 提交与 Pull Request
 
