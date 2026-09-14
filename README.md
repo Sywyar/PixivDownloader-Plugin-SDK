@@ -42,7 +42,7 @@ Gradle 使用 `compileOnly`，sbt 使用 `Provided`。该薄 JAR 入口通过标
 
 ## 版本与兼容性
 
-SDK 版本独立于 App 版本，使用 `x.y.z` 以及结构化的 `-alphaN`、`-betaN`、`-rcN` 预发布后缀。App 发布本身不会生成新 SDK；只有 SDK 身份变化并通过主仓库同一源码提交的质量门禁后才会发布候选。
+SDK 版本独立于 App 版本。新预发布版本使用 `x.y.z-alpha.N`、`x.y.z-beta.N` 或 `x.y.z-rc.N`，序号从 1 开始且不补零；历史 `alphaN`、`betaN`、`rcN` 继续兼容读取。SDK 按核心数字、`alpha < beta < rc < 正式版` 和数字序号排序，例如 `rc2 < rc.10`。同一序号的新旧拼写优先级相同，不能仅换拼写重新发布；Maven 坐标、Tag、附件和文档路径始终保留原始版本。App 发布本身不会生成新 SDK；只有 SDK 身份变化并通过主仓库同一源码提交的质量门禁后才会发布候选。
 
 插件的 `plugin.requires` 继续声明 SDK 的 `major.minor` 兼容线。用于开发验证的宿主版本只是已验证基线，不表示插件只能用于该 App 版本。
 

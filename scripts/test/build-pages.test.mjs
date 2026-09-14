@@ -162,6 +162,46 @@ test('发行 ID 只接受结构化 SDK 版本', () => {
     const sequence = crypto.randomInt(1, 100);
     assert.throws(() => parseReleaseId(releaseId(sequence, 'r')), /invalid SDK Release ID/u);
     assert.equal(parseReleaseId(releaseId(sequence, 'beta')).prereleaseSequence, sequence);
+    for (const channel of ['alpha', 'beta', 'rc']) {
+        for (const separator of ['', '.']) {
+            const raw = `${TEST_VERSION}-${channel}${separator}${sequence}`;
+            const parsed = parseReleaseId(`sdk-api-v${raw}`);
+            assert.equal(parsed.version, raw);
+            assert.equal(parsed.releaseId, `sdk-api-v${raw}`);
+            assert.equal(parsed.prereleaseChannel, channel);
+            assert.equal(parsed.prereleaseSequence, sequence);
+        }
+        for (const suffix of ['.0', '.01', '..1', '.1.2', '.1+build', '.', '']) {
+            assert.throws(() => parseReleaseId(`sdk-api-v${TEST_VERSION}-${channel}${suffix}`), /invalid SDK Release ID/u);
+        }
+    }
+});
+
+test('新旧后缀混排按渠道和数字序号选预览，保留历史页面路径与精确坐标', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pixiv-sdk-pages-spelling-'));
+    try {
+        const releases = path.join(root, 'releases');
+        const output = path.join(root, 'site');
+        fs.mkdirSync(releases);
+        const expected = ['', '-rc.10', '-rc2', '-beta.12', '-alpha.20']
+                .map(suffix => `sdk-api-v${TEST_VERSION}${suffix}`);
+        for (const id of expected) createRelease(releases, id, 4);
+        const result = buildPages({ releasesDir: releases, output });
+        assert.deepEqual(result.releases.map(item => item.releaseId), expected);
+        assert.equal(result.preview.releaseId, expected[1]);
+        assert.equal(result.latest.releaseId, expected[0]);
+        const index = fs.readFileSync(path.join(output, 'index.html'), 'utf8');
+        for (const id of expected) {
+            assert.ok(index.includes(`javadoc/${id}/`));
+            assert.ok(fs.readFileSync(path.join(output, 'javadoc', id, 'index.html'), 'utf8')
+                    .includes(id.slice('sdk-api-v'.length)));
+        }
+        const metadataFile = path.join(releases, expected[1], 'sdk-release.json');
+        const metadata = JSON.parse(fs.readFileSync(metadataFile, 'utf8'));
+        metadata.mavenCoordinates[0].version = metadata.sdkVersion.replace('-rc.', '-rc');
+        fs.writeFileSync(metadataFile, JSON.stringify(metadata), 'utf8');
+        assert.throws(() => buildPages({ releasesDir: releases, output }), /invalid Maven coordinate/u);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 test('当前与历史 schema 共存，宿主 ZIP 不参与 Pages 下载和解压', () => {

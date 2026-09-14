@@ -15,7 +15,7 @@ concurrency:
 jobs:
   build:
     if: ${{ (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'sdk-api-v')) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master') }}
-    uses: Sywyar/PixivDownloader/.github/workflows/sdk-pages.yml@71ef80287c54418ae0db25f1e7319d939bcaf54e
+    uses: Sywyar/PixivDownloader/.github/workflows/sdk-pages.yml@8b43832a8ab71de708664d1f3f6e7518c17b4c2a
 
   deploy:
     needs: build
