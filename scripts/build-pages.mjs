@@ -7,7 +7,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-const RELEASE_PATTERN = /^sdk-api-v(?<version>(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)(?:-(?<channel>alpha|beta|rc)(?<sequence>[1-9]\d*))?)$/u;
+const RELEASE_PATTERN = /^sdk-api-v(?<version>(?<major>0|[1-9]\d*)\.(?<minor>0|[1-9]\d*)\.(?<patch>0|[1-9]\d*)(?:-(?<channel>alpha|beta|rc)\.?(?<sequence>[1-9]\d*))?)$/u;
 const CHANNEL_ORDER = new Map([['alpha', 0], ['beta', 1], ['rc', 2]]);
 const SOURCE_REPOSITORY = 'https://github.com/Sywyar/PixivDownloader';
 const MAVEN_GROUP = 'io.github.sywyar.pixivdownloader';

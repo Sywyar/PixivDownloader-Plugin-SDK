@@ -42,7 +42,7 @@ Use `compileOnly` in Gradle or `Provided` in sbt. The thin entry JAR uses standa
 
 ## Versioning and compatibility
 
-The SDK version is independent from the App version. It uses `x.y.z` plus structured `-alphaN`, `-betaN`, or `-rcN` prerelease suffixes. An App release alone does not produce a new SDK; a candidate is published only after the SDK identity changes and the same source commit passes the main repository quality gate.
+The SDK version is independent from the App version. New prereleases use `x.y.z-alpha.N`, `x.y.z-beta.N`, or `x.y.z-rc.N`, with a positive sequence and no leading zeros. Readers also accept historical `alphaN`, `betaN`, and `rcN` suffixes. SDK ordering compares the core numbers, then `alpha < beta < rc < stable`, then the numeric sequence: for example, `rc2 < rc.10`. Both spellings of the same sequence have equal priority, so changing spelling alone cannot create a new release. Maven coordinates, tags, assets, and documentation paths retain the original version. An App release alone does not produce a new SDK; a candidate is published only after the SDK identity changes and the same source commit passes the main repository quality gate.
 
 `plugin.requires` continues to declare the SDK `major.minor` compatibility line. A host version used for development verification is a tested baseline, not a statement that the plugin works only with that App version.
 
