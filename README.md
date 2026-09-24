@@ -48,12 +48,14 @@ SDK 版本独立于 App 版本。新预发布版本使用 `x.y.z-alpha.N`、`x.y
 
 ## Javadoc
 
-每次 SDK Release 发布后，Pages workflow 会重新校验全部历史 SDK 文档附件，并将 Javadoc 部署到：
+每次 SDK Release 发布后，Pages workflow 会重新校验全部历史 SDK 文档附件，构建并部署版本化 Javadoc。公开站点提供以下入口：
 
 - 版本索引：<https://sywyar.github.io/PixivDownloader-Plugin-SDK/>
 - 稳定版入口：`/latest/`，没有稳定版本时不会指向 RC；
 - 预发布入口：`/preview/`；
 - 固定版本：`/javadoc/sdk-api-v<version>/`。
+
+以公开版本索引和固定版本页面实际可访问为准，workflow 成功本身不代表新版本已经可见。在线站点尚未更新时，可先打开同一版本 SDK ZIP 中的 `docs/javadocs/index.html`。
 
 Pages 支持历史 schema 1/2 与带独立运行附件的 schema 4。构建站点只下载生成 Javadoc 所需的 SDK 或历史 Javadoc ZIP，不下载历代宿主；运行附件的真实性由主仓库发布及运行消费者校验。
 

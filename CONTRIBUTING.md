@@ -24,6 +24,12 @@ Pages 生成器的输入按 Release ID 分目录保存，包含 `sdk-release.jso
 4. SDK 发布、CI 与 Pages 的 workflow 实现统一在主仓库维护；本仓库只保留事件触发、最小权限和固定到主仓库完整 commit SHA 的薄调用器。Pages 部署 job 只取得 `pages: write` 与 `id-token: write`，所有调用器都不得接收跨仓库发布 token。
 5. 已发布 Tag、Release 和附件不可移动、覆盖或删除后重建；错误通过新 SDK 版本修正。
 
+## Pages 发布验收
+
+部署后检查公开站点的 `releases.json` 和目标 `/javadoc/sdk-api-v<version>/` 页面。若 workflow 成功但站点仍旧，比较本次 `github-pages` artifact 与公开内容，并核对部署日志中的 `pages_build_version` 是否与上次相同；同一提交的重复部署可能仍保留旧站点。保留原 Release、Tag 和附件，先定位部署问题，不重新打包 SDK。需要手动部署时，在已合入的 `master` 上运行 `pages.yml`，完成后再次核对公开内容。
+
 ## English summary
 
 Use the main PixivDownloader repository for API, BOM, templates, Javadocs, version gates, release packaging, and reusable CI/Pages workflow implementations. This repository keeps only event-triggered thin callers pinned to a full main-repository commit SHA and grants Pages write/OIDC permissions only to its deploy job; cross-repository release tokens never enter these callers. Run `npm test`, keep generated files out of `master`, and never overwrite an existing SDK tag or release asset.
+
+After deployment, check the public `releases.json` and the target `/javadoc/sdk-api-v<version>/` page. If the workflow succeeds but the site stays unchanged, compare the `github-pages` artifact with the public content and check whether `pages_build_version` repeats the previous deployment's commit. Redeploying the same commit may leave the old site in place. Diagnose the deployment without repackaging the SDK or replacing its Release, tag, or assets. Manual deployments run `pages.yml` on merged `master` and require the same public-content check.
