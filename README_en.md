@@ -48,12 +48,14 @@ The SDK version is independent from the App version. New prereleases use `x.y.z-
 
 ## Javadocs
 
-After each SDK Release, the Pages workflow verifies the SDK documentation assets of every historical Release and deploys Javadocs to:
+After each SDK Release, the Pages workflow verifies the SDK documentation assets of every historical Release, then builds and deploys versioned Javadocs. The public site provides these entry points:
 
 - version index: <https://sywyar.github.io/PixivDownloader-Plugin-SDK/>;
 - stable entry: `/latest/`, which never points to an RC when no stable version exists;
 - prerelease entry: `/preview/`;
 - immutable version: `/javadoc/sdk-api-v<version>/`.
+
+Check that the public version index lists the release and its version page opens. A successful workflow alone does not confirm public availability. If the site has not updated, open `docs/javadocs/index.html` in the SDK ZIP for that version.
 
 Pages supports historical schemas 1/2 and schema 4 with a separate runtime asset. Site builds download only the SDK or historical Javadoc ZIP needed for documentation, without downloading past hosts. The main repository publishing and runtime consumer checks verify the runtime assets.
 
