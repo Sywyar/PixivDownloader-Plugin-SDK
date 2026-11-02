@@ -2,32 +2,51 @@
 
 [English](README_en.md)
 
-本仓库是 PixivDownloader 插件 SDK 的发行入口，只保存下载说明、版本化 Javadoc 站点生成器和仓库维护文档。SDK API 源码、BOM、插件模板与可信发布流程由 [PixivDownloader 主仓库](https://github.com/Sywyar/PixivDownloader) 维护；本仓库不会复制或重新签发这些源码。
+本仓库是 PixivDownloader 第三方插件 SDK 的发行与文档站点入口，提供开发包下载说明、Maven 依赖坐标和版本化 Javadoc。SDK API 源码、BOM、插件模板与可信发布流程由 [PixivDownloader 主仓库](https://github.com/Sywyar/PixivDownloader) 维护；完整插件开发教程见 [在线文档](https://sywyar.github.io/PixivDownloader/#/zh-cn/plugin-development)。
 
-## 获取 SDK
+## 1. 获取并校验 SDK 开发包
 
-可用版本以本仓库的 [Releases](https://github.com/Sywyar/PixivDownloader-Plugin-SDK/releases) 为唯一事实源。包含 `developmentRuntime` 元数据的开发包采用下述布局；历史版本按各自包内 README 使用。
+从 [Releases](https://github.com/Sywyar/PixivDownloader-Plugin-SDK/releases) 下载目标版本的发行附件（历史版本请按各自包内 README 使用）：
 
-- `PixivDownloader-Plugin-SDK-<version>.zip`：插件开发工程，默认源码位于根 `src/`，另含下载类型、Gradle 和 sbt 独立示例、Maven Wrapper、完整 Javadoc，以及 IntelliJ IDEA、VS Code 和 Eclipse 的共享 Run / Debug 配置；
-- `PixivDownload-<host-version>-full-offline.zip`：独立运行附件，含固定宿主和完整官方插件，首次运行由工具按需下载；
-- `sdk-release.json`：SDK 版本、源码提交、Maven 坐标，以及配套宿主、官方插件清单和两个 ZIP 的固定身份、大小与摘要；
-- `SHA256SUMS` 与 detached signatures：完整性和来源校验材料。
+| 附件 | 用途 |
+| --- | --- |
+| `PixivDownloader-Plugin-SDK-<version>.zip` | 独立插件开发工程（含根 `src/`、下载类型与 Gradle / sbt 示例、Maven Wrapper、离线 Javadoc 及 IntelliJ IDEA / VS Code / Eclipse 的 Run / Debug 配置） |
+| `PixivDownload-<host-version>-full-offline.zip` | 配套固定宿主与完整官方插件运行包（首次执行 Run / Debug 时由工具自动按需下载） |
+| `sdk-release.json` | SDK 版本、源码提交、Maven 坐标及上述两个 ZIP 的固定大小与 SHA-256 清单 |
+| `SHA256SUMS` 与 `.asc` | 完整性校验清单与 OpenPGP 独立签名 |
 
-下载同一 Release 的 SDK ZIP、`sdk-release.json` 和 `SHA256SUMS` 后可执行：
+下载同一 Release 的附件后，可校验文件摘要：
 
 ```bash
 sha256sum --ignore-missing --check SHA256SUMS
 ```
 
-安装 JDK 17 和 Node.js，解压 SDK 并导入根 `pom.xml`。只构建使用 `sh ./mvnw clean verify`，运行使用 `sh ./mvnw verify exec:exec@sdk-run`，调试改为 `sdk-debug`，停止使用 `sh ./mvnw exec:exec@sdk-stop`；Windows 将 Wrapper 改为 `.\mvnw.cmd`。完整 API 文档从 `docs/javadocs/index.html` 打开。
+## 2. 构建并运行第一个插件
 
-IDE 导入不会启动宿主。Run / Debug 会先构建当前插件，再校验配套运行包并通过正式本地安装流程部署本次产物；构建失败会中止启动。worker 插件调试其独立 JVM，full-trust 插件调试宿主，默认地址为 `127.0.0.1:5005`。各 IDE 的操作与前置条件见包内 README。
+1. 安装 JDK 17+ 与 Node.js（具体版本要求见包内 README），解压 `PixivDownloader-Plugin-SDK-<version>.zip`。
+2. 在工程根目录构建并运行验证（Windows PowerShell 将 `sh ./mvnw` 替换为 `.\mvnw.cmd`）：
 
-已校验的 ZIP 缓存位于 `~/.cache/pixivdownloader-sdk/`。每个工程在 `.dev/` 中保存独立运行副本、配置、数据库、日志和下载；每次运行恢复锁定的官方集合，并关闭此环境的自动更新。缺失或摘要错误会失败，不切换到新 nightly。离线运行须先完成运行包准备和构建依赖缓存。
+   ```bash
+   # 仅构建并运行测试（产物位于 target/）
+   sh ./mvnw clean verify
 
-## Maven 坐标
+   # 构建插件、准备固定运行包并启动配套宿主
+   sh ./mvnw verify exec:exec@sdk-run
 
-发行元数据包含 `pixivdownload-sdk` 的版本可使用以下 Maven Central 坐标；版本须与 Release 完全一致。历史版本按包内 README 使用独立 API 模块和 BOM。
+   # 以远程调试模式启动（默认监听 127.0.0.1:5005）
+   sh ./mvnw verify exec:exec@sdk-debug
+
+   # 停止当前工程的开发宿主
+   sh ./mvnw exec:exec@sdk-stop
+   ```
+
+IDE 导入工程本身不会启动宿主；执行共享的 Run / Debug 配置时才会编译插件并通过正式本地安装流程部署到隔离环境（构建失败则中止启动）。`declarative-process` 插件调试独立 worker JVM，`host-process-full-trust` 插件调试宿主 JVM。
+
+已校验的运行包缓存在 `~/.cache/pixivdownloader-sdk/`；工程运行副本、配置、数据库、日志与下载数据隔离在工程 `.dev/` 目录（每次启动恢复锁定的官方插件集合并关闭自动更新）。离线开发需先完成一次运行包准备与构建依赖缓存。
+
+## 3. Maven / Gradle / sbt 坐标
+
+包含统一入口 `pixivdownload-sdk` 的发行版本可使用以下 Maven Central 坐标（请将 `SDK_VERSION` 替换为与 Release 完全一致的版本号）：
 
 ```xml
 <dependency>
@@ -38,31 +57,34 @@ IDE 导入不会启动宿主。Run / Debug 会先构建当前插件，再校验�
 </dependency>
 ```
 
-Gradle 使用 `compileOnly`，sbt 使用 `Provided`。该薄 JAR 入口通过标准 POM 传递公开 SDK 和宿主提供的编译依赖，不把它们打进插件。三个 API 模块与 `pixivdownload-sdk-bom` 仍可独立消费。插件不得依赖 App artifact、宿主私有实现或官方插件私有类。
+Gradle 使用 `compileOnly("io.github.sywyar.pixivdownloader:pixivdownload-sdk:SDK_VERSION")`，sbt 使用 `"io.github.sywyar.pixivdownloader" % "pixivdownload-sdk" % "SDK_VERSION" % Provided`。该入口通过标准 POM 传递公开 API（`pixivdownload-sdk-info`、`pixivdownload-plugin-api`、`pixivdownload-core-api`）及宿主提供的编译依赖，不会将宿主共享类打入插件包；三个 API 模块与 `pixivdownload-sdk-bom` 仍可单独引用。严禁依赖 `pixivdownload-app`、宿主内部实现类或官方插件私有类。
 
-## 版本与兼容性
+## 4. 版本与兼容性声明
 
-SDK 版本独立于 App 版本。新预发布版本使用 `x.y.z-alpha.N`、`x.y.z-beta.N` 或 `x.y.z-rc.N`，序号从 1 开始且不补零；历史 `alphaN`、`betaN`、`rcN` 继续兼容读取。SDK 按核心数字、`alpha < beta < rc < 正式版` 和数字序号排序，例如 `rc2 < rc.10`。同一序号的新旧拼写优先级相同，不能仅换拼写重新发布；Maven 坐标、Tag、附件和文档路径始终保留原始版本。App 发布本身不会生成新 SDK；只有 SDK 身份变化并通过主仓库同一源码提交的质量门禁后才会发布候选。
+SDK 版本独立于主程序版本。预发布版采用 `x.y.z-alpha.N`、`x.y.z-beta.N` 或 `x.y.z-rc.N`（正整数序号、无前导零，兼容读取历史 `alphaN` / `betaN` / `rcN`），按核心版本号、`alpha < beta < rc < 正式版` 及数字序号排序（如 `rc2 < rc.10`；同序号新旧拼写优先级相同，不重复发布）。
 
-插件的 `plugin.requires` 继续声明 SDK 的 `major.minor` 兼容线。用于开发验证的宿主版本只是已验证基线，不表示插件只能用于该 App 版本。
+插件在 `plugin.properties` 中通过 `plugin.requires` 声明运行所需 SDK 契约：
 
-## Javadoc
+| 编译所用 SDK | `plugin.properties` 写法 | 宿主兼容规则 |
+| --- | --- | --- |
+| 稳定版 | `plugin.requires=major.minor` | 宿主 SDK major 相同且 minor 不低于声明值（不声明 patch 下限） |
+| 预发布版 | `plugin.requires==完整SDK版本` | 第二个 `=` 属于属性值，要求精确匹配该预发布版本；不同 RC 及 RC 与稳定版默认不兼容 |
 
-每次 SDK Release 发布后，Pages workflow 会重新校验全部历史 SDK 文档附件，构建并部署版本化 Javadoc。公开站点提供以下入口：
+配套运行包的宿主版本仅作为开发验证基线，插件在用户端能否安装仍由 SDK 契约版本决定。
+
+## 5. 在线与离线 Javadoc
+
+每次 SDK Release 发布后，GitHub Pages 会校验全部历史文档附件并部署版本化 Javadoc：
 
 - 版本索引：<https://sywyar.github.io/PixivDownloader-Plugin-SDK/>
-- 稳定版入口：`/latest/`，没有稳定版本时不会指向 RC；
-- 预发布入口：`/preview/`；
-- 固定版本：`/javadoc/sdk-api-v<version>/`。
+- 最新稳定版：`/latest/`（尚无稳定版时不指向预发布版）
+- 最新预发布版：`/preview/`
+- 固定版本：`/javadoc/sdk-api-v<version>/`
 
-以公开版本索引和固定版本页面实际可访问为准，workflow 成功本身不代表新版本已经可见。在线站点尚未更新时，可先打开同一版本 SDK ZIP 中的 `docs/javadocs/index.html`。
+线上版本是否可用以版本索引和固定版本页面实际可访问为准；站点尚未刷新时，可直接打开同版本 SDK ZIP 内的 `docs/javadocs/index.html`。
 
-Pages 支持历史 schema 1/2 与带独立运行附件的 schema 4。构建站点只下载生成 Javadoc 所需的 SDK 或历史 Javadoc ZIP，不下载历代宿主；运行附件的真实性由主仓库发布及运行消费者校验。
+## 6. 贡献与安全反馈
 
-## 贡献边界
-
-- API、BOM、模板、Javadoc 内容和 SDK 打包逻辑：在 [PixivDownloader 主仓库](https://github.com/Sywyar/PixivDownloader) 提交。
-- 本仓库 README、Pages 生成器、下载说明和安全策略：按 [CONTRIBUTING.md](CONTRIBUTING.md) 提交。
-- SDK Release、Tag 和发行附件由主仓库可信发布链创建，不接受手工覆盖。
-
-完整插件开发标准以 [PixivDownloader 在线文档](https://sywyar.github.io/PixivDownloader/) 为准。Douyin 模块是通过公开 SDK 构建的完整第三方参考实现，不属于官方分发集合。
+- 修改 SDK API、BOM、插件模板、Javadoc 注释或发布脚本：提交至 [PixivDownloader 主仓库](https://github.com/Sywyar/PixivDownloader)。
+- 修改本仓库 README、Pages 生成器或安全说明：按 [CONTRIBUTING.md](CONTRIBUTING.md) 提交 PR（SDK Tag / Release 由主仓库可信发布链写入，禁止手动覆盖）。
+- 完整第三方 SDK 参考实现见 [Douyin 插件源码仓库](https://github.com/Sywyar/PixivDownloader-Plugin-Douyin)。安全与签名问题请按 [SECURITY.md](SECURITY.md) 私密报告。
